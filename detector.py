@@ -51,6 +51,11 @@ class Detection:
     score: float
     class_name: str = ""
 
+    def __post_init__(self):
+        # Питоновские типы — защита от numpy.int64.
+        self.box = tuple(int(v) for v in self.box)
+        self.class_id = int(self.class_id)
+        self.score = float(self.score)
     @property
     def x1(self): return self.box[0]
     @property
@@ -76,7 +81,7 @@ class YoloDetector:
             if not os.path.exists(p):
                 raise FileNotFoundError(f"Не найден файл: {p}")
 
-        self.net = cv2.dnn.readNetFromONNX("yolo_tiny/yolov4-tiny.onnx")
+        self.net = cv2.dnn.readNet(weights, config)
         self.input_size = input_size
         self.conf_threshold = conf_threshold
         self.nms_threshold = nms_threshold
