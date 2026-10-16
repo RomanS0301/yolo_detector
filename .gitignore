@@ -47,3 +47,9 @@ n# ONNX modelnyolo_tiny/*.onnx
 
 # ONNX model
 yolo_tiny/*.onnx
+
+# Test videos
+samples/
+
+# Test videos
+samples/

@@ -14,9 +14,11 @@ import cv2
 import numpy as np
 
 from detector import Detection
-from drawing import draw_detections, draw_faces, FACE_COLOR
+from drawing import (draw_detections, draw_faces, draw_tracks,
+                     FACE_COLOR, _HAS_GUI)
 from face_detector import FaceDetection
 from logger import get_logger
+from tracker import SortTracker
 
 
 @dataclass
@@ -74,6 +76,7 @@ def process_video(
     max_frames: int = 0,
     window_name: str = "YOLO video",
     print_every: int = 30,
+    track: bool = False,
 ) -> VideoStats:
     """
     Основной цикл видео.
@@ -82,8 +85,15 @@ def process_video(
     infer_every: детектить раз в N кадров (1 = каждый кадр).
     save_every: сохранять каждый N-й кадр в save_frames_dir (0 = не сохранять).
     max_frames: остановиться после N кадров (0 = без лимита).
+    track: включить SORT-трекинг (стабильные ID между кадрами).
     """
     logger = get_logger()
+
+    if show and not _HAS_GUI:
+        logger.warning("cv2.imshow недоступен (headless-сборка). "
+                       "--show игнорируется.")
+        show = False
+
     cap = open_source(source)
     stats = VideoStats()
 
@@ -113,7 +123,11 @@ def process_video(
     frame_idx = 0
     last_dets = []
     last_faces = []
+    last_tracks = []
     last_infer_ms = 0.0
+    tracker = SortTracker() if track else None
+    if tracker is not None:
+        logger.info("Трекинг: включён (SORT)")
     t_start = time.perf_counter()
 
     try:
@@ -132,6 +146,8 @@ def process_video(
             if did_infer:
                 t0 = time.perf_counter()
                 last_dets = detector.detect(frame)
+                if tracker is not None:
+                    last_tracks = tracker.update(last_dets)
                 if face_detector is not None:
                     last_faces = face_detector.detect(frame)
                 last_infer_ms = (time.perf_counter() - t0) * 1000
@@ -141,7 +157,11 @@ def process_video(
 
             # --- Отрисовка ---
             annotated = frame.copy()
-            annotated = draw_detections(annotated, dets)
+            if tracker is not None:
+                annotated = draw_tracks(annotated, last_tracks)
+            else:
+                annotated = draw_detections(annotated, dets)
+
             if face_detector is not None:
                 annotated = draw_faces(annotated, faces)
                 if faces:
@@ -154,14 +174,21 @@ def process_video(
                                 FACE_COLOR, 2, cv2.LINE_AA)
 
             frame_ms = (time.perf_counter() - t_frame) * 1000
-            stats.add(last_infer_ms, frame_ms, len(dets), len(faces))
+            n_dets = len(last_tracks) if tracker is not None else len(dets)
+            stats.add(last_infer_ms, frame_ms, n_dets, len(faces))
 
             # --- HUD ---
             infer_mark = "INF" if did_infer else "···"
-            hud = (f"frame={frame_idx}  {infer_mark}  "
-                   f"det={len(dets)}  "
-                   f"infer={last_infer_ms:.1f}ms  "
-                   f"fps={stats.fps_avg:.1f}")
+            if tracker is not None:
+                hud = (f"frame={frame_idx}  {infer_mark}  "
+                       f"tracks={len(last_tracks)}  "
+                       f"infer={last_infer_ms:.1f}ms  "
+                       f"fps={stats.fps_avg:.1f}")
+            else:
+                hud = (f"frame={frame_idx}  {infer_mark}  "
+                       f"det={len(dets)}  "
+                       f"infer={last_infer_ms:.1f}ms  "
+                       f"fps={stats.fps_avg:.1f}")
             cv2.putText(annotated, hud, (10, annotated.shape[0] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (0, 0, 0), 4, cv2.LINE_AA)

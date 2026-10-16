@@ -36,6 +36,7 @@ CONFIG_KEY_MAP = {
     "save_every":    "save_every",
     "infer_every":   "infer_every",
     "max_frames":    "max_frames",
+    "track":         "track",
     
 }
 

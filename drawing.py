@@ -11,6 +11,12 @@ from detector import Detection
 from face_detector import FaceDetection
 
 
+# Проверяем, доступен ли GUI в этой сборке OpenCV.
+# В headless-сборке imshow/waitKey отсутствуют — тогда --show молча
+# отключается, а не падает с AttributeError.
+_HAS_GUI = hasattr(cv2, "imshow") and hasattr(cv2, "waitKey")
+
+
 # ---------- Цвета (BGR, как в OpenCV) ----------
 
 TEXT_COLOR  = (0, 0, 0)          # подписи на цветных плашках
@@ -18,6 +24,7 @@ COUNT_COLOR = (0, 0, 255)        # общий счётчик сверху
 DEFAULT_BOX_COLOR = (0, 255, 0)  # fallback
 FACE_COLOR = (0, 255, 255)       # жёлтый — боксы лиц
 FACE_LANDMARK_COLOR = (0, 0, 255)  # красный — ключевые точки
+TRACK_ID_COLOR = (255, 255, 255)   # белый — для ID треков
 
 CLASS_PALETTE = [
     (0, 255, 0),
@@ -47,9 +54,6 @@ def draw_detections(image: np.ndarray,
     """Рисует боксы YOLO-детекций и счётчик."""
     for d in detections:
         color = color_for_class(d.class_id)
-
-        # Явное приведение к питоновским int — cv2.rectangle
-        # не принимает numpy.int64 / numpy.float32.
         x1, y1 = int(d.x1), int(d.y1)
         x2, y2 = int(d.x2), int(d.y2)
 
@@ -62,6 +66,30 @@ def draw_detections(image: np.ndarray,
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, TEXT_COLOR, 2, cv2.LINE_AA)
 
     cv2.putText(image, f"Detections: {len(detections)}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, COUNT_COLOR, 2, cv2.LINE_AA)
+    return image
+
+
+def draw_tracks(image: np.ndarray, tracks) -> np.ndarray:
+    """
+    Рисует боксы треков с ID вида "truck #5  0.87".
+    tracks — список Track из tracker.py.
+    """
+    for t in tracks:
+        color = color_for_class(t.class_id)
+        x, y, w, h = t.box
+        x1, y1 = int(x), int(y)
+        x2, y2 = int(x + w), int(y + h)
+
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+
+        label = f"{t.class_name} #{t.track_id}  {t.score:.2f}"
+        (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+        cv2.rectangle(image, (x1, y1 - th - base), (x1 + tw, y1), color, -1)
+        cv2.putText(image, label, (x1, y1 - base),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, TEXT_COLOR, 2, cv2.LINE_AA)
+
+    cv2.putText(image, f"Tracks: {len(tracks)}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, COUNT_COLOR, 2, cv2.LINE_AA)
     return image
 
@@ -97,6 +125,11 @@ def browse_results(results: List[Tuple[str, np.ndarray]],
       A / [         — предыдущее
       Q / Esc       — выход
     """
+    if not _HAS_GUI:
+        print("[warn] cv2.imshow недоступен (headless-сборка). "
+              "Просмотр пропущен.")
+        return
+
     n = len(results)
     idx = 0
     print(f"\nПросмотр {n} изображений. "

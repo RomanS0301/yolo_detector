@@ -105,6 +105,8 @@ def build_parser():
                    help="сохранять каждый N-й кадр в output/frames")
     p.add_argument("--infer-every", type=int, default=1,
                    help="инференс раз в N кадров (ускорение для видео)")
+    p.add_argument("--track", action="store_true",
+                   help="трекинг объектов между кадрами (SORT)")
     p.add_argument("--max-frames", type=int, default=0,
                    help="остановиться после N кадров (0 = без лимита)")
     p.add_argument("--batch-size", type=int, default=8)
@@ -279,6 +281,7 @@ def main():
             save_frames_dir=os.path.join(args.output_dir, "frames"),
             infer_every=args.infer_every,
             max_frames=args.max_frames,
+            track=args.track,
         )
         print(f"\nВидео: кадров={stats.frames}  "
               f"детекций={stats.detections}  лиц={stats.faces}  "
@@ -435,10 +438,15 @@ def main():
     print(f"JSON: {saved}")
 
     if args.show and saved_results:
-        try:
-            browse_results(saved_results)
-        except KeyboardInterrupt:
-            cv2.destroyAllWindows()
+        from drawing import _HAS_GUI
+        if not _HAS_GUI:
+            logger.warning("cv2.imshow недоступен (headless-сборка). "
+                           "Просмотр пропущен.")
+        else:
+            try:
+                browse_results(saved_results)
+            except KeyboardInterrupt:
+                cv2.destroyAllWindows() 
 
 
 if __name__ == "__main__":

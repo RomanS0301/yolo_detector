@@ -29,6 +29,23 @@ python main.py images/trucks.jpg
 
 ### 1. Зависимости
 
+
+**Для локальной разработки** (с окнами `--show`):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+**Для сервера, CI, Docker** (без GUI):
+
+```bash
+pip install -r requirements.txt
+```
+
+Разница: `requirements-dev.txt` включает `opencv-python` (GUI), а
+`requirements.txt` — `opencv-python-headless` (без окон). В headless-сборке
+флаг `--show` молча игнорируется, а не падает с ошибкой.
+
 ```bash
 pip install opencv-python numpy matplotlib openpyxl flask
 # опционально — для --backend onnx
@@ -180,11 +197,20 @@ python main.py --webcam 0 --show
 # Ускорение: детектить раз в N кадров
 python main.py --video samples/vtest.avi --infer-every 3 --save-video output/fast.mp4
 
-# Ограничить обработку
-python main.py --video samples/vtest.avi --max-frames 100 --quiet
+# Трекинг объектов между кадрами
+python main.py --video samples/vtest.avi --track --show
 ```
 
 **Управление в окне:** `Q` / `Esc` — выход.
+
+**HUD в окне:**
+
+- `frame=NNN` — номер кадра;
+- `INF` / `···` — был ли инференс на кадре;
+- `det=N` — количество детекций (без трекинга);
+- `tracks=N` — количество треков (с `--track`);
+- `infer=Xms` — время последнего инференса;
+- `fps=Y` — средний FPS.
 
 **Флаги для видео:**
 
@@ -196,6 +222,7 @@ python main.py --video samples/vtest.avi --max-frames 100 --quiet
 | `--save-every N` | Сохранять каждый N-й кадр в `output/frames` | `0` |
 | `--infer-every N` | Инференс раз в N кадров (ускорение) | `1` |
 | `--max-frames N` | Остановиться после N кадров | `0` |
+| `--track` | Трекинг объектов между кадрами (SORT) | выкл. |
 
 **HUD в окне:** `frame=NNN`, `INF`/`···` (был ли инференс на кадре),
 `det=N`, `infer=Xms`, `fps=Y`.
@@ -300,6 +327,13 @@ python main.py images/ --xlsx ""                 # отключить Excel
 | `--check` | Проверить окружение и выйти | — |
 | `--list-classes` | Показать 80 классов COCO | — |
 | `--list-presets` | Показать пресеты | — |
+| `--video` | Путь к видеофайлу | — |
+| `--webcam` | Индекс веб-камеры | — |
+| `--save-video` | Сохранить видео | — |
+| `--save-every` | Сохранять каждый N-й кадр | `0` |
+| `--infer-every` | Инференс раз в N кадров | `1` |
+| `--max-frames` | Ограничение по кадрам | `0` |
+| `--track` | Трекинг (SORT) | выкл. |
 
 ---
 
@@ -353,6 +387,8 @@ yolo_detector/
 ├── models/               # YuNet ONNX
 ├── images/, output/
 └── README.md
+├── tracker.py            # SORT-трекинг для видео
+├── video_processor.py    # обработка видео и веб-камеры
 ```
 
 **Зависимости модулей** (без циклов):
@@ -405,10 +441,13 @@ pytest
 ## Требования
 
 - Python 3.8+
-- OpenCV 4.5.4+
+- OpenCV 4.5.4+ (`opencv-python` для GUI или `opencv-python-headless` для сервера)
 - numpy, matplotlib, openpyxl, flask
 - onnxruntime (для `--backend onnx`)
 - pytest (для тестов)
+
+Установка: `pip install -r requirements-dev.txt` (с GUI) или
+`pip install -r requirements.txt` (без GUI).
 
 ## Лицензия
 
