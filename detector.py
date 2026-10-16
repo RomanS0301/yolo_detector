@@ -204,3 +204,35 @@ class YoloDetector:
         self.net.setInput(blob)
         outs = self.net.forward(self.out_layers)
         return self._postprocess(outs, orig_sizes)
+    
+    def detect_tiled(self,
+                     image: np.ndarray,
+                     tile_size: int = 640,
+                     overlap: int = 128) -> List[Detection]:
+        """
+        Детекция с тайлингом. Большое изображение режется на плитки
+        tile_size x tile_size с перекрытием overlap, каждая детектится
+        отдельно, координаты пересчитываются, применяется глобальный NMS.
+        """
+        from tiling import compute_tiles, global_nms
+
+        h, w = image.shape[:2]
+        # Маленькое изображение — тайлинг не нужен.
+        if w <= tile_size and h <= tile_size:
+            return self.detect(image)
+
+        tiles = compute_tiles(w, h, tile_size, overlap)
+        all_dets: List[Detection] = []
+
+        for (x1, y1, x2, y2) in tiles:
+            crop = image[y1:y2, x1:x2]
+            tile_dets = self.detect(crop)
+            for d in tile_dets:
+                all_dets.append(Detection(
+                    box=(d.x1 + x1, d.y1 + y1, d.box[2], d.box[3]),
+                    class_id=d.class_id,
+                    score=d.score,
+                    class_name=d.class_name,
+                ))
+
+        return global_nms(all_dets, self.nms_threshold)
